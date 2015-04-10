@@ -14,7 +14,7 @@ before_install:
 - go get github.com/modocache/gover
 - go get gopkg.in/check.v1
 script:
-- make ci
+- make test
 after_script:
 - $HOME/gopath/bin/goveralls -service="travis-ci" -coverprofile=profile.cov -repotoken
   $COVERALLS_TOKEN
