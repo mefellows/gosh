@@ -5,7 +5,6 @@ go test -race -v ./...
 go get github.com/axw/gocov/gocov
 go get github.com/mattn/goveralls
 go get golang.org/x/tools/cmd/cover
-go get code.google.com/p/go.tools/cmd/cover
 go get github.com/modocache/gover
 
 # Run test coverage on each subdirectories and merge the coverage profile.
