@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"github.com/masterzen/winrm/winrm"
+	"github.com/mitchellh/cli"
 	"github.com/mitchellh/packer/common/uuid"
 	"github.com/packer-community/winrmcp/winrmcp"
 	"io/ioutil"
@@ -30,6 +31,7 @@ type GoShell struct {
 	history History
 	client  *winrm.Client
 	config  *ConnectionConfig
+	ui      cli.Ui
 }
 
 type ConnectionConfig struct {
@@ -47,11 +49,19 @@ func NewShell(config *ConnectionConfig) (*GoShell, error) {
 		return nil, err
 	}
 
+	ui := &cli.ColoredUi{
+		Ui:          &cli.BasicUi{Writer: os.Stdout, Reader: os.Stdin, ErrorWriter: os.Stderr},
+		OutputColor: cli.UiColorYellow,
+		InfoColor:   cli.UiColorNone,
+		ErrorColor:  cli.UiColorRed,
+	}
+
 	return &GoShell{
 		buffer:  make([]byte, 0),
 		history: make([]map[Request]Response, 0),
 		config:  config,
 		client:  client,
+		ui:      ui,
 	}, nil
 }
 
@@ -84,6 +94,7 @@ func (s *GoShell) waitForInput(fp *os.File, writeChan chan<- string, quitChan ch
 func (s *GoShell) runCommand(request *Request) *Response {
 	var err error
 	response := &Response{exitCode: 0}
+
 	if !request.elevated {
 		log.Printf("Running remote command...")
 		_, err = s.client.RunWithInput(winrm.Powershell(request.command), os.Stdout, os.Stderr, os.Stdin)
@@ -184,7 +195,6 @@ func (s *GoShell) StartElevated(cmd string) (err error) {
 	// Run the script that was uploaded
 	command := fmt.Sprintf("powershell -executionpolicy bypass -file \"%s\"", "%TEMP%\\gosh-elevated-shell.ps1")
 	log.Printf("Running script: %s", command)
-	//s.client, err = winrm.NewClientWithParameters(&winrm.Endpoint{Host: host, Port: port, HTTPS: false, Insecure: true, CACert: nil}, user, pass, winrm.NewParameters(timeout, "en-US", 153600))
 	_, err = s.client.RunWithInput(command, os.Stdout, os.Stderr, os.Stdin)
 	return err
 }
