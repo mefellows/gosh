@@ -46,8 +46,6 @@ GoSH is Go gettable: `go get github.com/mefellows/gosh`
     > mfapi\vagrant
     ```
 
-1.
-
 ## Features
 
 * Remote Windows shell (PowerShell) invocation from Linux, MacOSX and Windows
