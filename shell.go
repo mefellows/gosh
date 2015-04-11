@@ -9,6 +9,7 @@ import (
 	"github.com/mitchellh/cli"
 	"github.com/mitchellh/packer/common/uuid"
 	"github.com/packer-community/winrmcp/winrmcp"
+	"github.com/peterh/liner"
 	"io/ioutil"
 	"log"
 	"os"
@@ -25,14 +26,12 @@ type Response struct {
 	exitCode int
 	response string
 }
-type History []map[Request]Response
 
 type GoShell struct {
-	buffer  []byte
-	history History
-	client  *winrm.Client
-	config  *ConnectionConfig
-	ui      cli.Ui
+	buffer []byte
+	client *winrm.Client
+	config *ConnectionConfig
+	ui     cli.Ui
 }
 
 type ConnectionConfig struct {
@@ -63,36 +62,71 @@ func NewShell(config *ConnectionConfig) (*GoShell, error) {
 	}
 
 	return &GoShell{
-		buffer:  make([]byte, 0),
-		history: make([]map[Request]Response, 0),
-		config:  config,
-		client:  client,
-		ui:      ui,
+		buffer: make([]byte, 0),
+		config: config,
+		client: client,
+		ui:     ui,
 	}, nil
 }
 
-func (s *GoShell) waitForInput(fp *os.File, writeChan chan<- string, quitChan chan<- bool) {
-	// read from shell prompt
+func setupLiner() *liner.State {
+	line := liner.NewLiner()
+	historyFile := "/tmp/.liner_history"
+
+	if f, err := os.Open(); err == nil {
+		line.ReadHistory(f)
+		f.Close()
+	}
+	return line
+}
+
+func (s *GoShell) readInput() (string, error) {
+	liner := setupLiner()
+	liner.SetCtrlCAborts(true)
+	defer liner.Close()
+
+	input, err := liner.Prompt("$ ")
+	if err != nil {
+		log.Print("Error reading line: ", err)
+	} else {
+		liner.AppendHistory(input)
+
+		// Save to file, but do it asynchronously
+		go func() {
+			if f, err := os.Create(history_fn); err != nil {
+				log.Print("Error writing history file: ", err)
+			} else {
+				liner.WriteHistory(f)
+				f.Close()
+			}
+		}()
+	}
+	liner.Close()
+	return input, err
+}
+
+// Create a prompt and read from it
+func (s *GoShell) waitForInput(fp *os.File, writeChan chan string, quitChan chan<- bool) {
 	go func() {
-		reader := bufio.NewReader(fp)
 		for {
-			fmt.Printf("\n> ")
-			line, _, err := reader.ReadLine()
+			line, err := s.readInput()
 
 			switch {
-			case strings.TrimSpace(string(line)) == "":
+			case strings.TrimSpace(line) == "":
 				break
 			}
-			if err != nil {
+			if err != nil || line == "exit" || line == "quit" {
+				if err != nil {
+					fmt.Printf("Error: %s", err.Error())
+				}
 				quitChan <- true
 				return
 			}
 
-			// append token.SEMICOLON
-			line = append(line, 59)
-
-			// talk to writeChan chan?
-			writeChan <- string(line)
+			fmt.Printf("Line, about to send: %s", line)
+			writeChan <- line
+			fmt.Printf("sent")
+			return
 		}
 	}()
 }
@@ -128,7 +162,6 @@ func (s *GoShell) runCommand(request *Request) *Response {
 
 func (s *GoShell) shell(fp *os.File) {
 	// main shell loop
-
 	if fp == nil {
 		fp = os.Stdin
 	}
@@ -155,11 +188,16 @@ loop:
 			s.runCommand(r)
 			fmt.Println()
 		case <-quitChan:
-			fmt.Println("[GoSH] terminated")
+			s.ui.Info("Quitting...")
 			break loop
 		}
 	}
 
+	return
+}
+
+func (s *GoShell) Close() {
+	//s.input.Close()
 	return
 }
 
