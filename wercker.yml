@@ -22,8 +22,9 @@ build:
             output: $WERCKER_OUTPUT_DIR/dist
 deploy:
     steps:
-        - github-create-release:
+        - tcnksm/ghr:
             token: $GITHUB_TOKEN
-            tag: $RELEASE_VERSION
-            title: $RELEASE_TITLE
-            draft: $RELEASE_IS_DRAFT
+            version: $RELEASE_VERSION
+            input: dist
+            replace: true
+            pre-release: $RELEASE_IS_DRAFT
