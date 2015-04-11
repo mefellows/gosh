@@ -86,7 +86,7 @@ cmd.exe /c net start winrm
 * Implementation of a more elegant parser, lexer and grammar
 * Support Secure WinRM communications via certificates
 * History
-* ctrl-r lookup support
+* ~~ctrl-r lookup support~~
 * Basic variable interpolation
 * [Winrmcp](https://github.com/packer-community/winrmcp) support for simple remote copy/paste 
 * Considering creating a daemon on the Windows host to avoid need for WinRM altogether
