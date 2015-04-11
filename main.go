@@ -3,9 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	//	"github.com/howeyc/gopass"
 	"github.com/peterh/liner"
-
 	"io/ioutil"
 	"log"
 	"os"
