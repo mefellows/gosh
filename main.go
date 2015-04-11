@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/howeyc/gopass"
 	"io/ioutil"
 	"log"
 	"os"
@@ -22,7 +23,7 @@ func main() {
 
 	flag.StringVar(&host, "host", "localhost", "winrm host")
 	flag.StringVar(&user, "username", "vagrant", "winrm admin username")
-	flag.StringVar(&pass, "password", "vagrant", "winrm admin password")
+	flag.StringVar(&pass, "password", "", "winrm admin password")
 	flag.StringVar(&timeout, "timeout", "PT36000S", "winrm timeout")
 	flag.IntVar(&port, "port", 5985, "winrm port")
 	flag.BoolVar(&debug, "debug", false, "output debugging info")
@@ -47,6 +48,11 @@ Welcome to
  'Coz even Remote-PSSession sucks!  
 
 `)
+	if pass == "" {
+		fmt.Printf("Enter password for %s@%s: ", user, host)
+		maskedPass := gopass.GetPasswdMasked()
+		pass = string(maskedPass)
+	}
 
 	config := &ConnectionConfig{
 		Hostname: host,

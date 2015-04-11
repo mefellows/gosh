@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -48,12 +49,17 @@ func NewShell(config *ConnectionConfig) (*GoShell, error) {
 	if err != nil {
 		return nil, err
 	}
+	var ui cli.Ui
 
-	ui := &cli.ColoredUi{
-		Ui:          &cli.BasicUi{Writer: os.Stdout, Reader: os.Stdin, ErrorWriter: os.Stderr},
-		OutputColor: cli.UiColorYellow,
-		InfoColor:   cli.UiColorNone,
-		ErrorColor:  cli.UiColorRed,
+	if runtime.GOOS == "windows" {
+		ui = &cli.BasicUi{Writer: os.Stdout, Reader: os.Stdin, ErrorWriter: os.Stderr}
+	} else {
+		ui = &cli.ColoredUi{
+			Ui:          &cli.BasicUi{Writer: os.Stdout, Reader: os.Stdin, ErrorWriter: os.Stderr},
+			OutputColor: cli.UiColorYellow,
+			InfoColor:   cli.UiColorNone,
+			ErrorColor:  cli.UiColorRed,
+		}
 	}
 
 	return &GoShell{
