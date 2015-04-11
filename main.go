@@ -35,7 +35,7 @@ func main() {
 	fmt.Printf(`
 Welcome to
 
- .d8888b.            .d8888b.  888               888 888 TM
+ .d8888b.            .d8888b.   888               888 888 TM
  d88P  Y88b          d88P  Y88b 888               888 888 
  888    888          Y88b.      888               888 888 
  888         .d88b.   "Y888b.   88888b.   .d88b.  888 888 

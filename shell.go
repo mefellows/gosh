@@ -95,17 +95,26 @@ func (s *GoShell) runCommand(request *Request) *Response {
 	var err error
 	response := &Response{exitCode: 0}
 
+	var stdOut, errOut string
+	var exitCode int
 	if !request.elevated {
 		log.Printf("Running remote command...")
-		_, err = s.client.RunWithInput(winrm.Powershell(request.command), os.Stdout, os.Stderr, os.Stdin)
+		stdOut, errOut, exitCode, err = s.client.RunWithString(winrm.Powershell(request.command), "")
+		response.exitCode = exitCode
+		if stdOut != "" {
+			s.ui.Output(stdOut)
+		}
+		if errOut != "" {
+			s.ui.Error(errOut)
+		}
 	} else {
 		log.Printf("Running elevated remote command...")
 		err = s.StartElevated(request.command)
 	}
 
 	if err != nil {
-		fmt.Println(err)
-		response.exitCode = 1
+		s.ui.Error(err.Error())
+		return response
 	}
 
 	return response
