@@ -1,21 +1,14 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
-	"encoding/base64"
 	"fmt"
 	"github.com/masterzen/winrm/winrm"
 	"github.com/mitchellh/cli"
-	"github.com/mitchellh/packer/common/uuid"
-	"github.com/packer-community/winrmcp/winrmcp"
 	"github.com/peterh/liner"
-	"io/ioutil"
 	"log"
 	"os"
 	"runtime"
 	"strings"
-	"time"
 )
 
 type Request struct {
@@ -24,7 +17,9 @@ type Request struct {
 }
 type Response struct {
 	exitCode int
-	response string
+	err      error
+	stdOut   string
+	stdErr   string
 }
 
 type GoShell struct {
@@ -41,6 +36,8 @@ type ConnectionConfig struct {
 	Password string
 	Timeout  string
 }
+
+var historyFile = "/tmp/.liner_history"
 
 func NewShell(config *ConnectionConfig) (*GoShell, error) {
 	client, err := winrm.NewClientWithParameters(&winrm.Endpoint{Host: config.Hostname, Port: config.Port, HTTPS: false, Insecure: true, CACert: nil}, config.Username, config.Password, winrm.NewParameters(config.Timeout, "en-US", 153600))
@@ -71,9 +68,8 @@ func NewShell(config *ConnectionConfig) (*GoShell, error) {
 
 func setupLiner() *liner.State {
 	line := liner.NewLiner()
-	historyFile := "/tmp/.liner_history"
 
-	if f, err := os.Open(); err == nil {
+	if f, err := os.Open(historyFile); err == nil {
 		line.ReadHistory(f)
 		f.Close()
 	}
@@ -93,7 +89,7 @@ func (s *GoShell) readInput() (string, error) {
 
 		// Save to file, but do it asynchronously
 		go func() {
-			if f, err := os.Create(history_fn); err != nil {
+			if f, err := os.Create(historyFile); err != nil {
 				log.Print("Error writing history file: ", err)
 			} else {
 				liner.WriteHistory(f)
@@ -123,41 +119,10 @@ func (s *GoShell) waitForInput(fp *os.File, writeChan chan string, quitChan chan
 				return
 			}
 
-			fmt.Printf("Line, about to send: %s", line)
 			writeChan <- line
-			fmt.Printf("sent")
 			return
 		}
 	}()
-}
-
-func (s *GoShell) runCommand(request *Request) *Response {
-	var err error
-	response := &Response{exitCode: 0}
-
-	var stdOut, errOut string
-	var exitCode int
-	if !request.elevated {
-		log.Printf("Running remote command...")
-		stdOut, errOut, exitCode, err = s.client.RunWithString(winrm.Powershell(request.command), "")
-		response.exitCode = exitCode
-		if stdOut != "" {
-			s.ui.Output(stdOut)
-		}
-		if errOut != "" {
-			s.ui.Error(errOut)
-		}
-	} else {
-		log.Printf("Running elevated remote command...")
-		err = s.StartElevated(request.command)
-	}
-
-	if err != nil {
-		s.ui.Error(err.Error())
-		return response
-	}
-
-	return response
 }
 
 func (s *GoShell) shell(fp *os.File) {
@@ -185,7 +150,18 @@ loop:
 				r.command = strings.SplitAfter(r.command, "sudo")[1]
 				r.elevated = true
 			}
-			s.runCommand(r)
+			posh := &Powershell{s.client}
+			res := posh.runCommand(r)
+			if res.stdOut != "" {
+				s.ui.Output(res.stdOut)
+			}
+			if res.stdErr != "" {
+				s.ui.Error(res.stdErr)
+			}
+
+			if res.err != nil {
+				s.ui.Error(res.err.Error())
+			}
 			fmt.Println()
 		case <-quitChan:
 			s.ui.Info("Quitting...")
@@ -199,90 +175,4 @@ loop:
 func (s *GoShell) Close() {
 	//s.input.Close()
 	return
-}
-
-type elevatedShellOptions struct {
-	Command  string
-	User     string
-	Password string
-}
-
-func (s *GoShell) StartElevated(cmd string) (err error) {
-	// The command gets put into an interpolated string in the PS script,
-	// so we need to escape any embedded quotes.
-	cmd = strings.Replace(cmd, "\"", "`\"", -1)
-
-	elevatedScript, err := createCommandText(cmd)
-
-	if err != nil {
-		return err
-	}
-
-	// Upload the script which creates and manages the scheduled task
-	winrmcp, err := winrmcp.New(fmt.Sprintf("%s:%d", host, port), &winrmcp.Config{
-		Auth:                  winrmcp.Auth{user, pass},
-		OperationTimeout:      time.Second * 60,
-		MaxOperationsPerShell: 15,
-	})
-	tmpFile, err := ioutil.TempFile(os.TempDir(), "gosh-elevated-shell.ps1")
-	log.Printf("Temp file: %s", tmpFile.Name())
-
-	writer := bufio.NewWriter(tmpFile)
-	if _, err := writer.WriteString(elevatedScript); err != nil {
-		return fmt.Errorf("Error preparing shell script: %s", err)
-	}
-
-	if err := writer.Flush(); err != nil {
-		return fmt.Errorf("Error preparing shell script: %s", err)
-	}
-
-	tmpFile.Close()
-
-	err = winrmcp.Copy(tmpFile.Name(), "${env:TEMP}/gosh-elevated-shell.ps1")
-
-	if err != nil {
-		log.Printf("Error copying shell script: %s", err)
-		return err
-	}
-
-	// Run the script that was uploaded
-	command := fmt.Sprintf("powershell -executionpolicy bypass -file \"%s\"", "%TEMP%\\gosh-elevated-shell.ps1")
-	log.Printf("Running script: %s", command)
-	_, err = s.client.RunWithInput(command, os.Stdout, os.Stderr, os.Stdin)
-	return err
-}
-
-func createCommandText(cmd string) (command string, err error) {
-
-	log.Printf("Building elevated command for: %s", cmd)
-
-	// generate command
-	var buffer bytes.Buffer
-	err = elevatedTemplate.Execute(&buffer, elevatedOptions{
-		User:            user,
-		Password:        pass,
-		TaskDescription: "GoSH elevated task",
-		TaskName:        fmt.Sprintf("gosh-%s", uuid.TimeOrderedUUID()),
-		EncodedCommand:  powershellEncode([]byte(cmd + "; exit $LASTEXITCODE")),
-	})
-
-	if err != nil {
-		return "", err
-	}
-
-	log.Printf("ELEVATED SCRIPT: %s\n\n", string(buffer.Bytes()))
-	return string(buffer.Bytes()), nil
-
-}
-
-func powershellEncode(buffer []byte) string {
-	// 2 byte chars to make PowerShell happy
-	wideCmd := ""
-	for _, b := range buffer {
-		wideCmd += string(b) + "\x00"
-	}
-
-	// Base64 encode the command
-	input := []uint8(wideCmd)
-	return base64.StdEncoding.EncodeToString(input)
 }

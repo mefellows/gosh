@@ -52,6 +52,7 @@ Y88b  d88P Y88..88P Y88b  d88P 888  888 Y8b.     888 888
 `)
 	if pass == "" {
 		in := liner.NewLiner()
+		in.SetCtrlCAborts(true)
 		maskedPass, _ := in.PasswordPrompt(fmt.Sprintf("Enter password for %s@%s: ", user, host))
 		in.Close()
 		pass = string(maskedPass)
