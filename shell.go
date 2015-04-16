@@ -38,6 +38,7 @@ type ConnectionConfig struct {
 }
 
 var historyFile = "/tmp/.liner_history"
+var completions = append(commands, operators...)
 
 func NewShell(config *ConnectionConfig) (*GoShell, error) {
 	client, err := winrm.NewClientWithParameters(&winrm.Endpoint{Host: config.Hostname, Port: config.Port, HTTPS: false, Insecure: true, CACert: nil}, config.Username, config.Password, winrm.NewParameters(config.Timeout, "en-US", 153600))
@@ -73,6 +74,28 @@ func setupLiner() *liner.State {
 		line.ReadHistory(f)
 		f.Close()
 	}
+
+	// Autocompletes common commands/args. Not perfect, but handy
+	line.SetCompleter(func(line string) (c []string) {
+
+		// If it's a command with args / spaces, we need to tokenize the input
+		// So we just complete the last incomplete statement
+		toComplete := line
+		prefix := ""
+		i := strings.LastIndex(line, " ")
+		if i > 0 {
+			toComplete = strings.TrimSpace(line[i:])
+			prefix = line[:i+1]
+		}
+
+		for _, n := range completions {
+			if strings.HasPrefix(strings.ToLower(n), strings.ToLower(toComplete)) {
+				c = append(c, fmt.Sprintf("%s%s", prefix, n))
+			}
+		}
+		return
+	})
+
 	return line
 }
 
