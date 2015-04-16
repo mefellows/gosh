@@ -1,4 +1,4 @@
-package main
+package commands
 
 var operators = []string{
 	"-AccessMode",
@@ -263,4 +263,8 @@ var operators = []string{
 	"-positionOfCursor",
 	"-tokens",
 	"-verb",
+}
+
+func GetPowershellOperators() []string {
+	return operators
 }

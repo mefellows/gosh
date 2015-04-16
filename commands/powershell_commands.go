@@ -1,6 +1,6 @@
-package main
+package commands
 
-var commands = []string{
+var powershell_commands = []string{
 	"Add-ProvisionedAppxPackage",
 	"Add-WindowsFeature",
 	"Apply-WindowsUnattend",
@@ -1369,4 +1369,8 @@ var commands = []string{
 	"Write-Progress",
 	"Write-Verbose",
 	"Write-Warning",
+}
+
+func GetPowershellCommands() []string {
+	return commands
 }

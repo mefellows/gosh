@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/masterzen/winrm/winrm"
+	"github.com/mefellows/gosh/commands"
 	"github.com/mitchellh/cli"
 	"github.com/peterh/liner"
 	"log"
@@ -38,7 +39,7 @@ type ConnectionConfig struct {
 }
 
 var historyFile = "/tmp/.liner_history"
-var completions = append(commands, operators...)
+var completions = append(commands.GetPowershellCommands(), append(commands.GetGoshCommands(), commands.GetPowershellOperators()...)...)
 
 func NewShell(config *ConnectionConfig) (*GoShell, error) {
 	client, err := winrm.NewClientWithParameters(&winrm.Endpoint{Host: config.Hostname, Port: config.Port, HTTPS: false, Insecure: true, CACert: nil}, config.Username, config.Password, winrm.NewParameters(config.Timeout, "en-US", 153600))
